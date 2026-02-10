@@ -1,0 +1,22 @@
+{
+  "id": "openclaw-remote",
+  "name": "OpenClaw Remote",
+  "description": "Remote monitoring and control dashboard for OpenClaw agents — real-time status, usage analytics, chat, diagnostics, and mobile access via PWA.",
+  "version": "0.1.0",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "basePath": {
+        "type": "string",
+        "default": "/remote"
+      }
+    }
+  },
+  "uiHints": {
+    "basePath": {
+      "label": "Dashboard Path",
+      "placeholder": "/remote"
+    }
+  }
+}
