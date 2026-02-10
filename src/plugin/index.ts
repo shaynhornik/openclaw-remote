@@ -4,14 +4,65 @@
  * Serves the Remote dashboard as a PWA on the gateway's HTTP server
  * and registers diagnostic RPC methods.
  */
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, dirname, resolve } from "node:path";
+import { existsSync } from "node:fs";
 import { createUiHandler } from "./serve-ui.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+/**
+ * Resolve the UI assets directory. Tries multiple strategies because
+ * jiti (OpenClaw's runtime TS loader) may not set import.meta.url
+ * to the actual source file path.
+ */
+function resolveUiRoot(): string {
+  const candidates: string[] = [];
+
+  // Strategy 1: import.meta.url (works in native ESM)
+  try {
+    const { fileURLToPath } = require("node:url");
+    const thisDir = dirname(fileURLToPath(import.meta.url));
+    candidates.push(join(thisDir, "..", "..", "dist", "ui"));
+  } catch {
+    // import.meta.url not available or not a file: URL
+  }
+
+  // Strategy 2: __filename (set by jiti/CJS)
+  try {
+    if (typeof __filename !== "undefined") {
+      candidates.push(join(dirname(__filename), "..", "..", "dist", "ui"));
+    }
+  } catch {
+    // __filename not defined
+  }
+
+  // Strategy 3: process.cwd-relative (if installed locally)
+  candidates.push(resolve("dist", "ui"));
+
+  // Strategy 4: known install paths
+  const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
+  if (home) {
+    candidates.push(join(home, ".openclaw", "extensions", "openclaw-remote", "dist", "ui"));
+    candidates.push(join(home, "openclaw-remote", "dist", "ui"));
+  }
+
+  // Strategy 5: OPENCLAW_HOME override
+  const openclawHome = process.env.OPENCLAW_HOME;
+  if (openclawHome) {
+    candidates.push(join(openclawHome, "extensions", "openclaw-remote", "dist", "ui"));
+  }
+
+  for (const candidate of candidates) {
+    if (existsSync(join(candidate, "index.html"))) {
+      return candidate;
+    }
+  }
+
+  // Return the first candidate as default (serve-ui will show a helpful error)
+  return candidates[0] ?? join("dist", "ui");
+}
 
 interface PluginApi {
   id: string;
+  source?: string;
   pluginConfig: Record<string, unknown>;
   logger: {
     info: (msg: string) => void;
@@ -42,26 +93,22 @@ interface PluginApi {
 
 export default function register(api: PluginApi): void {
   const basePath = String(api.pluginConfig?.basePath ?? "/remote");
-
-  // Resolve UI assets: dist/ui/ relative to the plugin package root
-  // Plugin source lives in src/plugin/, so package root is ../../
-  const packageRoot = join(__dirname, "..", "..");
-  const uiRoot = join(packageRoot, "dist", "ui");
+  const uiRoot = resolveUiRoot();
+  const uiFound = existsSync(join(uiRoot, "index.html"));
 
   const handler = createUiHandler({ uiRoot, basePath });
   api.registerHttpHandler(handler);
 
-  // Register a diagnostic RPC method
   api.registerGatewayMethod("remote.ping", ({ respond }) => {
     respond(true, {
       plugin: "openclaw-remote",
       version: "0.1.0",
       basePath,
-      ui: uiRoot,
+      uiRoot,
+      uiFound,
     });
   });
 
-  // Register a chat command so users can get the dashboard URL
   api.registerCommand({
     name: "remote",
     description: "Show the Remote dashboard URL",
@@ -72,5 +119,9 @@ export default function register(api: PluginApi): void {
     }),
   });
 
-  api.logger.info(`Remote dashboard serving at ${basePath}/`);
+  if (uiFound) {
+    api.logger.info(`Remote dashboard serving at ${basePath}/ (from ${uiRoot})`);
+  } else {
+    api.logger.warn(`Remote dashboard UI not found at ${uiRoot} — run 'npm run build' in the plugin directory`);
+  }
 }
