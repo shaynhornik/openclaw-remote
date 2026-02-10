@@ -2,7 +2,7 @@
 
 > **Early Development -- Not Production Ready**
 >
-> This project is under active development and **should be considered a security risk** until it reaches a stable release. Authentication, authorization, and transport security have not been fully audited. **Do not expose this to the public internet** without understanding the risks. See [SECURITY.md](SECURITY.md) for details.
+> This project is under active development and has not been through a security audit. Authentication, authorization, and transport security are still being built out. By installing this in its current state, you accept the associated risks. See [SECURITY.md](SECURITY.md) for details.
 
 A real-time monitoring and control dashboard for [OpenClaw](https://github.com/openclaw) gateways. Installs as an OpenClaw plugin and serves a full-featured PWA directly from the gateway's HTTP server -- no separate infrastructure required.
 
